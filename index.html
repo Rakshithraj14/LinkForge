@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkForge</title>
+<meta name="description" content="Paste a link, get the video, audio, subtitles or thumbnail.">
+<link rel="icon" href="/static/favicon.png">
+<link rel="apple-touch-icon" href="/static/mark.png">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<script>
+  // Set the theme before first paint so there is no light flash in dark mode.
+  try { const t = localStorage.getItem('lf-theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  :root {
+    --paper: #f3f3ef;
+    --card: #fbfbf9;
+    --card-2: #f6f6f2;
+    --line: #e2e2dc;
+    --text: #141c18;
+    --muted: #6a716d;
+    --forest: #1f5c45;
+    --forest-ink: #16271f;
+    --forest-soft: #e4efe8;
+    --side: #121614;
+    --side-text: #e6ebe8;
+    --side-muted: #8b938f;
+    --flame: #f5b335;
+    --danger: #c2371b;
+    --ok: #1f7a53;
+    --shadow: 0 1px 2px rgba(20, 28, 24, .05), 0 8px 24px -12px rgba(20, 28, 24, .12);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0e1210; --card: #151a17; --card-2: #121714; --line: #242b27;
+      --text: #e8ece9; --muted: #8e9691; --forest: #7cc9a0; --forest-ink: #214c3a;
+      --forest-soft: #183326; --side: #0a0d0b; --danger: #ff7a5c; --ok: #7cc9a0;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px -12px rgba(0, 0, 0, .6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0e1210; --card: #151a17; --card-2: #121714; --line: #242b27;
+    --text: #e8ece9; --muted: #8e9691; --forest: #7cc9a0; --forest-ink: #214c3a;
+    --forest-soft: #183326; --side: #0a0d0b; --danger: #ff7a5c; --ok: #7cc9a0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--text);
+    font: 15px/1.5 "Satoshi", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- shell ---------- */
+  .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .side {
+    position: sticky; top: 0; height: 100vh;
+    background: var(--side); color: var(--side-text);
+    display: flex; flex-direction: column;
+    padding: 22px 16px 20px; overflow: hidden;
+  }
+  .side > * { position: relative; z-index: 1; }
+  .side .wave { position: absolute; inset: auto 0 0 0; z-index: 0; width: 100%; height: 70%; pointer-events: none; }
+  .logo { display: flex; gap: 10px; align-items: center; padding: 0 12px 34px; text-decoration: none; }
+  .logo img { width: 40px; height: 40px; flex: none; border-radius: 11px; box-shadow: 0 0 0 1px rgba(245, 179, 53, .25); }
+  .logo b { display: block; font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .logo small { display: block; font-size: .78rem; color: var(--side-muted); }
+  .nav { display: grid; gap: 6px; }
+  .nav a {
+    position: relative;
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 16px; border-radius: 12px;
+    text-decoration: none; color: var(--side-muted); font-weight: 500;
+    transition: color .15s, background .15s;
+  }
+  .nav a i { font-size: 1.35rem; }
+  .nav a:hover { color: var(--side-text); background: rgba(255, 255, 255, .04); }
+  .nav a[aria-current="page"] {
+    color: #fff;
+    background: linear-gradient(180deg, #25473a, #1c3a2f);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  }
+  .nav a[aria-current="page"]::before {
+    content: ""; position: absolute; left: -16px; top: 8px; bottom: 8px; width: 4px;
+    border-radius: 0 4px 4px 0; background: #3fae7c;
+  }
+  .side-card {
+    margin-top: auto;
+    padding: 20px; border-radius: 14px;
+    background: rgba(18, 22, 20, .72);
+    border: 1px solid rgba(255, 255, 255, .07);
+    backdrop-filter: blur(6px);
+  }
+  .side-card i { font-size: 1.6rem; color: var(--flame); }
+  .side-card b { display: block; margin: 8px 0 4px; font-size: 1.02rem; }
+  .side-card p { margin: 0; font-size: .85rem; color: var(--side-muted); }
+  .side-foot { padding: 16px 12px 0; font-size: .78rem; color: var(--side-muted); line-height: 1.7; }
+  .side-foot .ph-fill { color: #e5484d; }
+  .side-foot img { width: 22px; height: 22px; border-radius: 6px; vertical-align: -6px; margin-right: 4px; }
+
+  .main { min-width: 0; padding: 16px 28px 40px 44px; }
+  .top { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  .icon-btn {
+    display: grid; place-items: center;
+    width: 44px; height: 44px; margin-left: auto;
+    border: 0; border-radius: 12px; background: none; font-size: 1.45rem;
+  }
+  .icon-btn:hover { background: var(--card); }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
+  .rail { display: grid; gap: 16px; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; padding: 6px 0 20px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 13px; border-radius: 99px;
+    background: var(--forest-soft); color: var(--forest);
+    font-size: .85rem; font-weight: 500;
+  }
+  .hero h1 {
+    margin: 16px 0 10px; max-width: 12ch;
+    font-size: clamp(2.4rem, 4.2vw, 3.35rem); line-height: 1.02; letter-spacing: -.035em; font-weight: 900;
+  }
+  .hero h1 span { display: block; color: var(--forest); }
+  .hero p { margin: 0; max-width: 60ch; color: var(--muted); font-size: 1.02rem; }
+  .hero-art {
+    position: absolute; right: 0; top: -6px; width: 300px; height: 190px;
+    perspective: 700px; pointer-events: none;
+  }
+  .sheet {
+    position: absolute; border-radius: 22px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, .55), rgba(210, 222, 214, .25));
+    border: 1px solid rgba(255, 255, 255, .6);
+    box-shadow: 0 20px 40px -24px rgba(20, 60, 45, .35);
+    transform: rotateY(-24deg) rotateX(8deg) rotateZ(-8deg);
+  }
+  :root[data-theme="dark"] .sheet { background: linear-gradient(135deg, rgba(124, 201, 160, .08), rgba(124, 201, 160, .02)); border-color: rgba(124, 201, 160, .12); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sheet { background: linear-gradient(135deg, rgba(124, 201, 160, .08), rgba(124, 201, 160, .02)); border-color: rgba(124, 201, 160, .12); } }
+  .sheet.s1 { width: 150px; height: 120px; left: 150px; top: 8px; }
+  .sheet.s2 { width: 150px; height: 120px; left: 120px; top: 22px; }
+  .player {
+    position: absolute; left: 20px; top: 40px; width: 150px; height: 118px;
+    border-radius: 20px;
+    background: linear-gradient(145deg, #2c5e4a, #0f231b 70%);
+    box-shadow: 0 26px 40px -16px rgba(12, 40, 30, .55), inset 0 1px 0 rgba(255, 255, 255, .18);
+    transform: rotateY(-24deg) rotateX(8deg) rotateZ(-8deg);
+    display: grid; place-items: center;
+    animation: bob 5s ease-in-out infinite;
+  }
+  .player::before {
+    content: ""; position: absolute; inset: 14px; border-radius: 12px;
+    background: linear-gradient(160deg, #132a21, #0b1914);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  }
+  .player svg { position: relative; width: 44px; filter: drop-shadow(0 0 14px rgba(245, 179, 53, .6)); }
+  @keyframes bob { 50% { translate: 0 -6px; } }
+  .flow { position: absolute; left: 196px; top: 64px; display: grid; justify-items: center; gap: 2px; font-size: .88rem; }
+  .flow i { color: var(--muted); }
+
+  /* ---------- link input ---------- */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+  .linkbar { display: flex; gap: 10px; padding: 8px; }
+  .linkbar label {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+    padding: 0 12px 0 16px; border-radius: 11px; background: var(--card-2); border: 1px solid var(--line);
+  }
+  .linkbar label:focus-within { border-color: var(--forest); }
+  .linkbar label > i { font-size: 1.35rem; color: var(--muted); }
+  .linkbar input { flex: 1; min-width: 0; height: 46px; border: 0; background: none; outline: none; font-size: .98rem; }
+  .linkbar input::placeholder { color: var(--muted); }
+  .clear { border: 0; background: none; color: var(--muted); font-size: 1.1rem; display: grid; place-items: center; padding: 6px; border-radius: 8px; }
+  .clear:hover { color: var(--text); }
+  .btn-dark {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 0 26px; border: 0; border-radius: 11px;
+    background: var(--forest-ink); color: #f1f5f2; font-weight: 500;
+    transition: filter .15s, transform .1s;
+  }
+  .btn-dark:hover { filter: brightness(1.18); }
+  .btn-dark:active { transform: scale(.98); }
+  .btn-dark:disabled { opacity: .55; cursor: progress; }
+  .hint { min-height: 1.5em; margin: 8px 4px 0; font-size: .88rem; color: var(--danger); }
+  .hint:empty { display: none; }
+
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 12px 2px 18px; }
+  .chips a { display: inline-flex; align-items: center; gap: 9px; font-size: .92rem; text-decoration: none; border-radius: 8px; }
+  .chips a:not(.more):hover { color: var(--forest); text-decoration: underline; text-underline-offset: 3px; }
+  .chips .more { padding: 5px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  .chips .more:hover { border-color: var(--forest); }
+
+  /* Brand marks: Simple Icons SVGs as masks, so each glyph takes the tile's colour. */
+  .brand {
+    --s: 22px;
+    position: relative; flex: none; display: inline-block;
+    width: var(--s); height: var(--s); border-radius: calc(var(--s) * .26);
+    background: var(--bg, #333);
+  }
+  .brand::after {
+    content: ""; position: absolute; inset: 20%;
+    background: #fff;
+    -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat;
+  }
+  .brand.lg { --s: 42px; border-radius: 12px; }
+  .b-youtube { --bg: #ff0033; --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/youtube.svg); }
+  .b-instagram { --bg: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285aeb 90%); --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/instagram.svg); }
+  .b-x { --bg: #0f1419; --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/x.svg); }
+  .b-tiktok { --bg: #0f1419; --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/tiktok.svg); }
+  .b-reddit { --bg: #ff4500; --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/reddit.svg); }
+  .b-facebook { --bg: #0866ff; --icon: url(https://cdn.jsdelivr.net/npm/simple-icons@13/icons/facebook.svg); }
+  .b-web { --bg: var(--muted); --icon: url(https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/globe.svg); }
+  .b-youtube::after { inset: 18%; }
+  :root[data-theme="dark"] :is(.b-x, .b-tiktok) { box-shadow: inset 0 0 0 1px #2e3632; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(.b-x, .b-tiktok) { box-shadow: inset 0 0 0 1px #2e3632; } }
+
+  /* ---------- preview ---------- */
+  .preview {
+    display: flex; gap: 20px; align-items: center;
+    padding: 10px 20px 10px 10px; margin-bottom: 18px; text-decoration: none;
+    animation: rise .35s cubic-bezier(.2, .8, .2, 1);
+  }
+  a.preview:hover { border-color: color-mix(in srgb, var(--forest) 40%, var(--line)); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .thumb { position: relative; flex: none; width: 208px; aspect-ratio: 2 / 1; border-radius: 10px; overflow: hidden; background: var(--line); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dur {
+    position: absolute; right: 8px; bottom: 8px;
+    padding: 2px 8px; border-radius: 7px;
+    background: rgba(10, 14, 12, .8); color: #fff;
+    font-size: .82rem; font-weight: 500; font-variant-numeric: tabular-nums;
+  }
+  .pv-meta { flex: 1; min-width: 0; display: grid; gap: 3px; }
+  .pv-title { font-weight: 500; font-size: 1.04rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pv-sub { color: var(--muted); font-size: .92rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pv-sub .ph-seal-check { color: #3d8bfd; }
+  .pv-site { display: flex; align-items: center; gap: 9px; margin-top: 4px; font-size: .92rem; }
+  .preview > .ph-caret-right { color: var(--muted); font-size: 1.2rem; }
+  .skel { border-radius: 6px; background: linear-gradient(100deg, var(--line) 30%, var(--card-2) 50%, var(--line) 70%) 0 0 / 250% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { to { background-position: -150% 0; } }
+
+  /* ---------- format picker ---------- */
+  .step { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+  .step-n { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--forest-ink); color: #fff; font-weight: 700; flex: none; }
+  .step h2 { margin: 0; font-size: 1.15rem; font-weight: 500; letter-spacing: -.01em; }
+  .step p { margin: 0; color: var(--muted); font-size: .88rem; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 0 0 20px; padding: 0; border: 0; }
+  .mode { position: relative; display: block; padding: 16px 20px 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .mode input { position: absolute; opacity: 0; }
+  .mode i.ic { font-size: 1.6rem; display: block; margin-bottom: 6px; }
+  .mode b { display: block; font-weight: 500; font-size: 1.05rem; }
+  .mode small { color: var(--muted); font-size: .92rem; }
+  .mode .tick {
+    position: absolute; right: 14px; top: 14px; width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; background: var(--forest-ink); color: #fff; font-size: .85rem;
+    opacity: 0; scale: .5; transition: opacity .15s, scale .2s cubic-bezier(.3, 1.6, .5, 1);
+  }
+  .mode:hover { border-color: color-mix(in srgb, var(--forest) 35%, var(--line)); }
+  .mode:has(input:checked) { border: 1.5px solid var(--forest); background: var(--forest-soft); }
+  .mode:has(input:checked) .tick { opacity: 1; scale: 1; }
+  .mode:has(input:focus-visible) { outline: 2px solid var(--flame); outline-offset: 2px; }
+
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 16px; }
+  .opts label { display: grid; gap: 8px; font-size: .92rem; }
+  .opts label > span { display: flex; align-items: center; gap: 10px; padding-left: 4px; }
+  .opts label > span i { font-size: 1.15rem; }
+  .select { position: relative; }
+  .select select {
+    width: 100%; height: 46px; padding: 0 44px 0 22px;
+    appearance: none; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+    font-size: .98rem; cursor: pointer;
+  }
+  .select select:disabled { color: var(--muted); cursor: not-allowed; background: var(--card-2); }
+  .select i { position: absolute; right: 18px; top: 50%; translate: 0 -50%; pointer-events: none; }
+
+  .adv { margin-bottom: 14px; }
+  .adv summary { display: flex; align-items: center; gap: 18px; padding: 12px 22px 12px 18px; cursor: pointer; list-style: none; }
+  .adv summary::-webkit-details-marker { display: none; }
+  .adv summary > i:first-child { font-size: 1.35rem; }
+  .adv summary b { display: block; font-weight: 500; }
+  .adv summary small { color: var(--muted); font-size: .82rem; }
+  .adv summary > .ph-caret-right { margin-left: auto; color: var(--muted); transition: rotate .2s; }
+  .adv[open] summary > .ph-caret-right { rotate: 90deg; }
+  .extras { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 4px 18px 18px; }
+  .extra { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--line); cursor: pointer; font-size: .92rem; }
+  .extra input { position: absolute; opacity: 0; }
+  .extra i { font-size: 1.2rem; color: var(--muted); }
+  .extra:has(input:checked) { border-color: var(--forest); background: var(--forest-soft); }
+  .extra:has(input:checked) i { color: var(--forest); }
+  .extra:has(input:focus-visible) { outline: 2px solid var(--flame); outline-offset: 2px; }
+  .adv-note { margin: 0; padding: 0 18px 16px; color: var(--muted); font-size: .82rem; }
+
+  .forge {
+    position: relative; overflow: hidden;
+    width: 100%; height: 62px; border-radius: 14px; font-size: 1.2rem;
+    background: radial-gradient(120% 180% at 50% 120%, #2f6a52 0%, #16271f 45%, #0f1a15 100%);
+    box-shadow: 0 14px 30px -14px rgba(15, 40, 30, .6), inset 0 1px 0 rgba(255, 255, 255, .08);
+  }
+  .forge::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(124, 201, 160, .25) 50%, transparent 70%) -100% 0 / 200% 100% no-repeat;
+    opacity: 0;
+  }
+  .forge.busy::after { opacity: 1; animation: sweep 1.4s linear infinite; }
+  @keyframes sweep { to { background-position: 200% 0; } }
+  .status { display: flex; align-items: center; gap: 8px; min-height: 1.5em; margin-top: 12px; font-size: .92rem; color: var(--muted); }
+  .status.err { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+
+  /* ---------- rail ---------- */
+  .rail .panel { padding: 20px 20px 16px; }
+  .rail h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 1.06rem; font-weight: 500; }
+  .rail h3 i { font-size: 1.5rem; }
+  .rail h3 a { margin-left: auto; font-size: .88rem; color: var(--forest); text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+  .sites { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .sites li { display: flex; align-items: center; gap: 22px; padding-left: 6px; }
+  .sites b { display: block; font-weight: 500; font-size: .95rem; }
+  .sites small { color: var(--muted); font-size: .85rem; }
+  .sites .dots { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--card-2); font-size: 1.3rem; }
+  .how { list-style: none; margin: 0; padding: 0 0 0 6px; }
+  .how li { position: relative; display: flex; gap: 22px; padding-bottom: 22px; }
+  .how li:last-child { padding-bottom: 4px; }
+  .how li:not(:last-child)::before { content: ""; position: absolute; left: 20px; top: 46px; bottom: 6px; border-left: 1.5px dashed var(--line); }
+  .how .n { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--forest-soft); color: var(--forest); font-weight: 500; flex: none; }
+  .how b { display: block; font-weight: 500; font-size: .95rem; padding-top: 1px; }
+  .how small { color: var(--muted); font-size: .88rem; }
+  .safe { display: flex; gap: 18px; align-items: center; }
+  .safe > i { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: var(--card-2); font-size: 1.8rem; flex: none; }
+  .safe b { font-weight: 500; }
+  .safe p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+
+  /* ---------- intro (once per session) ---------- */
+  .intro {
+    position: fixed; inset: 0; z-index: 50;
+    display: grid; place-items: center;
+    background: #080808; color: #fff;
+    animation: intro-out .45s ease-in 1.15s forwards;
+  }
+  .intro img { width: min(320px, 70vw); height: auto; animation: ignite .7s cubic-bezier(.2, 1.4, .4, 1) both; }
+  @keyframes ignite { from { scale: .2; opacity: 0; filter: blur(4px); } }
+  @keyframes intro-out { to { opacity: 0; visibility: hidden; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .intro { display: none; }
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1280px) {
+    .cols { grid-template-columns: 1fr; }
+    .rail { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .main { padding-left: 32px; }
+  }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .side { position: sticky; top: 0; z-index: 10; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; }
+    .side .wave, .side-card, .side-foot, .logo small { display: none; }
+    .logo { padding: 0; }
+    .logo b { font-size: 1.15rem; }
+    .logo img { width: 32px; height: 32px; border-radius: 9px; }
+    .nav { display: flex; margin-left: auto; gap: 2px; }
+    .nav a { padding: 9px; }
+    .nav a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .nav a[aria-current="page"]::before { display: none; }
+    .main { padding: 14px 16px 32px; }
+    .hero-art { display: none; }
+  }
+  @media (max-width: 640px) {
+    .modes { grid-template-columns: 1fr; gap: 10px; }
+    .mode { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+    .mode i.ic { margin: 0; }
+    .opts { grid-template-columns: 1fr; gap: 14px; }
+    .extras { grid-template-columns: 1fr 1fr; }
+    .linkbar { flex-wrap: wrap; }
+    .linkbar label { flex-basis: 100%; }
+    .linkbar .btn-dark { flex: 1; height: 44px; }
+    .preview { flex-direction: column; align-items: stretch; padding: 10px; gap: 12px; }
+    .preview .thumb { width: 100%; }
+    .preview > .ph-caret-right { display: none; }
+    .chips { gap: 8px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="intro" id="intro" hidden aria-hidden="true">
+  <img src="/static/logo.webp" alt="" width="240" height="240">
+</div>
+
+<div class="app">
+  <aside class="side">
+    <svg class="wave" viewBox="0 0 260 600" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="wv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f7a5a" stop-opacity=".55"/><stop offset="1" stop-color="#16271f" stop-opacity="0"/></linearGradient></defs>
+      <path d="M0 300c60-40 110 30 150 90s80 110 110 120v90H0z" fill="url(#wv)" opacity=".7"/>
+      <path d="M0 250c50 0 80 60 120 130s90 130 140 140" fill="none" stroke="#3fae7c" stroke-opacity=".25"/>
+      <path d="M0 330c40 10 70 70 110 130s100 90 150 100" fill="none" stroke="#3fae7c" stroke-opacity=".15"/>
+      <path d="M260 60c-40 60-30 140 0 220" fill="none" stroke="#3fae7c" stroke-opacity=".12"/>
+    </svg>
+    <a class="logo" href="#">
+      <img src="/static/mark.png" alt="" width="40" height="40">
+      <div><b>LinkForge</b><small>Turn links into media.</small></div>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#" aria-current="page"><i class="ph ph-house"></i><span>Home</span></a>
+    </nav>
+    <div class="side-card">
+      <i class="ph ph-hard-drives"></i>
+      <b>Runs on your server</b>
+      <p>Files stream straight to you and are deleted right after. Nothing is kept.</p>
+    </div>
+    <div class="side-foot"><img src="/static/mark.png" alt="LinkForge" width="22" height="22"> v1.0.0<br>Made with <i class="ph-fill ph-heart"></i> for creators</div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <button class="icon-btn" id="theme-btn" type="button" aria-label="Toggle dark mode"><i class="ph ph-sun"></i></button>
+    </header>
+
+    <div class="cols">
+      <main>
+        <section>
+          <div class="hero">
+            <div class="hero-art" aria-hidden="true">
+              <div class="sheet s1"></div><div class="sheet s2"></div>
+              <div class="player"><svg viewBox="0 0 24 24"><path fill="#f5b335" d="M7 4.5v15l12.5-7.5z"/></svg></div>
+              <div class="flow">Links<i class="ph ph-arrow-right"></i>Media</div>
+            </div>
+            <span class="pill"><i class="ph ph-lightning"></i>1800+ sites supported</span>
+            <h1>Paste a link. <span>Get your media.</span></h1>
+            <p>Download videos, audio, subtitles, thumbnails and more from 1800+ sites, in seconds.</p>
+          </div>
+
+          <form action="/download" method="post" id="f" target="dl-frame">
+            <div class="panel linkbar">
+              <label>
+                <i class="ph ph-link-simple"></i>
+                <input type="url" name="url" id="url" placeholder="Paste a video or post link" required autocomplete="off" aria-label="Media link">
+                <button class="clear" type="button" id="clear" aria-label="Clear link" hidden><i class="ph ph-x"></i></button>
+              </label>
+              <button class="btn-dark" type="button" id="analyze">Analyze <i class="ph ph-arrow-right"></i></button>
+            </div>
+            <p class="hint" id="hint" role="alert"></p>
+
+            <div class="chips" aria-label="Popular sites">
+              <a href="https://www.youtube.com/" target="_blank" rel="noopener"><i class="brand b-youtube"></i>YouTube</a>
+              <a href="https://www.instagram.com/" target="_blank" rel="noopener"><i class="brand b-instagram"></i>Instagram</a>
+              <a href="https://x.com/" target="_blank" rel="noopener"><i class="brand b-x"></i>X (Twitter)</a>
+              <a href="https://www.tiktok.com/" target="_blank" rel="noopener"><i class="brand b-tiktok"></i>TikTok</a>
+              <a href="https://www.reddit.com/" target="_blank" rel="noopener"><i class="brand b-reddit"></i>Reddit</a>
+              <a class="more" href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" rel="noopener"><i class="ph ph-plus"></i>1800 more</a>
+            </div>
+
+            <div id="preview-slot"></div>
+
+            <div class="step">
+              <span class="step-n">1</span>
+              <div><h2>Choose your format</h2><p>Pick what to download. Analyze a link to see the qualities it has.</p></div>
+            </div>
+
+            <fieldset class="modes">
+              <legend hidden>Format</legend>
+              <label class="mode panel"><input type="radio" name="mode" value="both" checked>
+                <i class="ph ph-video-camera ic"></i><span><b>Video + Audio</b><small>Best quality, merged</small></span>
+                <span class="tick"><i class="ph ph-check"></i></span></label>
+              <label class="mode panel"><input type="radio" name="mode" value="video">
+                <i class="ph ph-film-strip ic"></i><span><b>Video only</b><small>No audio, highest quality</small></span>
+                <span class="tick"><i class="ph ph-check"></i></span></label>
+              <label class="mode panel"><input type="radio" name="mode" value="audio">
+                <i class="ph ph-music-notes ic"></i><span><b>Audio only</b><small>MP3, M4A, Opus, FLAC</small></span>
+                <span class="tick"><i class="ph ph-check"></i></span></label>
+            </fieldset>
+
+            <div class="opts">
+              <label><span><i class="ph ph-high-definition"></i>Quality</span>
+                <div class="select"><select name="quality" id="quality"></select><i class="ph ph-caret-down"></i></div>
+              </label>
+              <label><span><i class="ph ph-file-video"></i>Format</span>
+                <div class="select"><select name="fmt" id="fmt"></select><i class="ph ph-caret-down"></i></div>
+              </label>
+            </div>
+
+            <details class="adv panel" id="adv">
+              <summary>
+                <i class="ph ph-sliders-horizontal"></i>
+                <span><b>More formats</b><small>Subtitles, auto captions, thumbnail, metadata</small></span>
+                <i class="ph ph-caret-right"></i>
+              </summary>
+              <div class="extras">
+                <label class="extra"><input type="radio" name="mode" value="subtitles"><i class="ph ph-subtitles"></i>Subtitles</label>
+                <label class="extra"><input type="radio" name="mode" value="auto_subtitles"><i class="ph ph-closed-captioning"></i>Auto captions</label>
+                <label class="extra"><input type="radio" name="mode" value="thumbnail"><i class="ph ph-image"></i>Thumbnail</label>
+                <label class="extra"><input type="radio" name="mode" value="info"><i class="ph ph-brackets-curly"></i>Info (JSON)</label>
+              </div>
+              <p class="adv-note">Chapters, title and uploader are embedded into video and audio files automatically. Several subtitle languages arrive as one zip.</p>
+            </details>
+
+            <input type="hidden" name="token" id="token">
+            <button class="btn-dark forge" type="submit" id="forge"><i class="ph ph-download-simple"></i>Forge it <i class="ph ph-arrow-right"></i></button>
+            <p class="status" id="status" role="status"></p>
+          </form>
+          <iframe name="dl-frame" id="dl-frame" title="Download" hidden></iframe>
+        </section>
+
+      </main>
+
+      <aside class="rail" id="rail">
+        <section class="panel">
+          <h3><i class="ph ph-globe"></i>Supported sites
+            <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" rel="noopener">View all <i class="ph ph-arrow-right"></i></a></h3>
+          <ul class="sites">
+            <li><i class="brand lg b-youtube"></i><div><b>YouTube</b><small>Videos, shorts, music</small></div></li>
+            <li><i class="brand lg b-instagram"></i><div><b>Instagram</b><small>Reels, posts, stories</small></div></li>
+            <li><i class="brand lg b-x"></i><div><b>X (Twitter)</b><small>Videos, GIFs</small></div></li>
+            <li><i class="brand lg b-tiktok"></i><div><b>TikTok</b><small>Videos, audio</small></div></li>
+            <li><i class="brand lg b-reddit"></i><div><b>Reddit</b><small>Videos, audio</small></div></li>
+            <li><i class="brand lg b-facebook"></i><div><b>Facebook</b><small>Videos</small></div></li>
+            <li><span class="dots"><i class="ph ph-dots-three"></i></span><div><small>1800+ more sites</small></div></li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h3><i class="ph ph-lightning"></i>How it works</h3>
+          <ol class="how">
+            <li><span class="n">1</span><div><b>Paste a link</b><small>From any supported site.</small></div></li>
+            <li><span class="n">2</span><div><b>Choose a format</b><small>Video, audio, or both.</small></div></li>
+            <li><span class="n">3</span><div><b>Forge it</b><small>The file lands in your downloads.</small></div></li>
+          </ol>
+        </section>
+        <section class="panel safe">
+          <i class="ph ph-shield-check"></i>
+          <div><b>Safe and private</b><p>No accounts, no tracking. Nothing is kept after your download.</p></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<template id="tpl-preview">
+  <a class="panel preview" target="_blank" rel="noopener">
+    <div class="thumb"><img alt="" referrerpolicy="no-referrer"><span class="dur" hidden></span></div>
+    <div class="pv-meta">
+      <div class="pv-title"></div>
+      <div class="pv-sub"><span class="pv-up"></span><i class="ph-fill ph-seal-check" hidden aria-label="Verified"></i></div>
+      <div class="pv-sub pv-stats"></div>
+      <div class="pv-site"><i class="brand"></i><span></span></div>
+    </div>
+    <i class="ph ph-caret-right"></i>
+  </a>
+</template>
+<template id="tpl-skeleton">
+  <div class="panel preview" aria-busy="true" aria-label="Loading preview">
+    <div class="thumb skel"></div>
+    <div class="pv-meta">
+      <div class="skel" style="height:14px;width:80%"></div>
+      <div class="skel" style="height:12px;width:40%;margin-top:6px"></div>
+      <div class="skel" style="height:12px;width:30%;margin-top:6px"></div>
+    </div>
+  </div>
+</template>
+
+<script>
+  const $ = (s, el = document) => el.querySelector(s);
+
+  // ---------- intro, once per session ----------
+  try {
+    if (!sessionStorage.getItem('lf-intro') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      $('#intro').hidden = false;
+      setTimeout(() => $('#intro').remove(), 1700);
+    }
+    sessionStorage.setItem('lf-intro', '1');
+  } catch {}
+
+  // ---------- theme ----------
+  const root = document.documentElement;
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  function setTheme(t) {
+    if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
+    try { localStorage.setItem('lf-theme', t); } catch {}
+    syncTheme();
+  }
+  function syncTheme() {
+    $('#theme-btn i').className = 'ph ' + (isDark() ? 'ph-moon' : 'ph-sun');
+  }
+  $('#theme-btn').onclick = () => setTheme(isDark() ? 'light' : 'dark');
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+  syncTheme();
+
+  // ---------- helpers ----------
+  const SITES = { youtube: 'YouTube', instagram: 'Instagram', twitter: 'X (Twitter)', tiktok: 'TikTok', reddit: 'Reddit', facebook: 'Facebook' };
+  function siteOf(key, url) {
+    let k = (key || '').toLowerCase();
+    if (!SITES[k]) {
+      try { const h = new URL(url).hostname.replace(/^www\./, ''); k = Object.keys(SITES).find(s => h.includes(s === 'twitter' ? 'x.com' : s) || h.includes(s)) || ''; } catch {}
+    }
+    return SITES[k] ? { cls: 'b-' + (k === 'twitter' ? 'x' : k), name: SITES[k] } : { cls: 'b-web', name: key || hostOf(url) };
+  }
+  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+  const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  function ago(ms) {
+    const s = (ms - Date.now()) / 1000;
+    for (const [u, n] of [['year', 31536e3], ['month', 2592e3], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]])
+      if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
+    return 'just now';
+  }
+  function duration(sec) {
+    sec = Math.round(sec);
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+  }
+
+  // ---------- format + quality pickers ----------
+  const FORMATS = {
+    video: [['mp4', 'MP4 (Default)'], ['webm', 'WebM'], ['mkv', 'MKV']],
+    audio: [['mp3', 'MP3 (Default)'], ['m4a', 'M4A'], ['opus', 'Opus'], ['flac', 'FLAC']],
+  };
+  const AUDIO_Q = [['best', 'Best (Recommended)'], ['320', '320 kbps'], ['192', '192 kbps'], ['128', '128 kbps']];
+  const STD_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+  const form = $('#f'), quality = $('#quality'), fmt = $('#fmt');
+  let heights = null;  // resolutions the analyzed video really has, tallest first
+
+  function videoQ() {
+    const hs = heights?.length ? heights : STD_HEIGHTS;
+    const rec = hs.find(h => h <= 1080) ?? hs[hs.length - 1];
+    return [['best', 'Best available'], ...hs.map(h => [String(h), h + 'p' + (h >= 2160 ? ' (4K)' : '') + (h === rec ? ' (Recommended)' : '')])];
+  }
+  function fill(select, opts, fallback) {
+    const keep = select.value;
+    select.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    select.value = opts.some(([v]) => v === keep) ? keep : fallback;
+  }
+  let kindShown, heightsShown;
+  function syncPickers() {
+    const mode = form.mode.value;
+    const kind = mode === 'audio' ? 'audio' : 'video';
+    const media = ['both', 'video', 'audio'].includes(mode);
+    if (kind !== kindShown || heights !== heightsShown) {
+      const q = kind === 'audio' ? AUDIO_Q : videoQ();
+      if (kind !== kindShown) quality.value = '';  // switching kind: take the new recommended default
+      fill(quality, q, (q.find(([, l]) => l.includes('Recommended')) || q[0])[0]);
+      if (kind !== kindShown) fill(fmt, FORMATS[kind], FORMATS[kind][0][0]);
+      kindShown = kind; heightsShown = heights;
+    }
+    fmt.disabled = quality.disabled = !media;
+  }
+  form.addEventListener('change', e => { if (e.target.name === 'mode') syncPickers(); });
+  syncPickers();
+
+  // ---------- preview ----------
+  const urlInput = $('#url'), slot = $('#preview-slot'), hint = $('#hint');
+  let debounce, ctrl, lastInfo = null, lastUrl = '';
+
+  function validUrl(v) { try { return /^https?:$/.test(new URL(v).protocol); } catch { return false; } }
+
+  urlInput.addEventListener('input', () => {
+    $('#clear').hidden = !urlInput.value;
+    hint.textContent = '';
+    clearTimeout(debounce);
+    if (!validUrl(urlInput.value.trim())) { ctrl?.abort(); slot.replaceChildren(); lastInfo = null; heights = null; syncPickers(); return; }
+    debounce = setTimeout(analyze, 600);
+  });
+  $('#clear').onclick = () => { urlInput.value = ''; urlInput.dispatchEvent(new Event('input')); urlInput.focus(); };
+  // Enter in the link box previews; only the Forge button downloads.
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#analyze').click(); } });
+  $('#analyze').onclick = () => {
+    if (!validUrl(urlInput.value.trim())) { hint.textContent = 'Paste a full link that starts with http:// or https://.'; urlInput.focus(); return; }
+    analyze(true);
+  };
+
+  async function analyze(force) {
+    const url = urlInput.value.trim();
+    if (url === lastUrl && lastInfo && !force) return;
+    clearTimeout(debounce);
+    ctrl?.abort(); ctrl = new AbortController();
+    lastUrl = url; lastInfo = null;
+    slot.replaceChildren($('#tpl-skeleton').content.cloneNode(true));
+    $('#analyze').disabled = true;
+    try {
+      const res = await fetch('/preview?url=' + encodeURIComponent(url), { signal: ctrl.signal });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || 'Could not read that link.');
+      lastInfo = { ...body, url };
+      heights = body.heights?.length ? body.heights : null;
+      syncPickers();
+      renderPreview(lastInfo);
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      slot.replaceChildren();
+      hint.textContent = e.message === 'Failed to fetch' ? 'Could not reach LinkForge. Check your connection.' : e.message;
+    } finally {
+      $('#analyze').disabled = false;
+    }
+  }
+
+  function renderPreview(info) {
+    const n = $('#tpl-preview').content.cloneNode(true);
+    const a = $('a', n);
+    a.href = info.url;
+    a.setAttribute('aria-label', 'Open original: ' + (info.title || 'link'));
+    const img = $('img', n);
+    if (info.thumbnail) img.src = info.thumbnail; else img.remove();
+    if (info.duration) { $('.dur', n).hidden = false; $('.dur', n).textContent = duration(info.duration); }
+    $('.pv-title', n).textContent = info.title || 'Untitled';
+    $('.pv-up', n).textContent = info.uploader || '';
+    $('.ph-seal-check', n).hidden = !info.verified;
+    const stats = [];
+    if (info.view_count != null) stats.push(compact.format(info.view_count) + ' views');
+    if (/^\d{8}$/.test(info.upload_date || '')) {
+      const d = info.upload_date;
+      stats.push(ago(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))));
+    }
+    $('.pv-stats', n).textContent = stats.join(', ');
+    const site = siteOf(info.site, info.url);
+    $('.pv-site .brand', n).classList.add(site.cls);
+    $('.pv-site span', n).textContent = site.name;
+    slot.replaceChildren(n);
+  }
+
+  // ---------- forge ----------
+  // The form posts into a hidden iframe. Success: the server sets a cookie
+  // carrying our token as the file starts streaming. Failure: the iframe loads
+  // the JSON error, which we read and show inline.
+  const forge = $('#forge'), status = $('#status'), frame = $('#dl-frame');
+  let poll, pending = null;
+  const forgeLabel = forge.innerHTML;
+
+  function setStatus(kind, icon, text) {
+    status.className = 'status ' + kind;
+    status.innerHTML = icon ? `<i class="ph ${icon}"></i>` : '';
+    status.append(text);
+  }
+  function done() {
+    clearInterval(poll); pending = null;
+    forge.disabled = false; forge.classList.remove('busy'); forge.innerHTML = forgeLabel;
+  }
+
+  form.addEventListener('submit', e => {
+    const url = urlInput.value.trim();
+    if (!validUrl(url)) { e.preventDefault(); hint.textContent = 'Paste a full link that starts with http:// or https://.'; urlInput.focus(); return; }
+    const token = Math.random().toString(36).slice(2);
+    $('#token').value = token;
+    pending = { token, started: Date.now() };
+    forge.disabled = true; forge.classList.add('busy');
+    forge.innerHTML = '<i class="ph ph-hourglass-medium"></i>Forging...';
+    setStatus('', 'ph-flame', 'Fetching and converting. Long videos can take a minute or two.');
+    clearInterval(poll);
+    poll = setInterval(() => {
+      if (!pending) return;
+      if (document.cookie.split('; ').includes('forged=' + pending.token)) {
+        document.cookie = 'forged=; max-age=0; path=/';
+        setStatus('ok', 'ph-check-circle', 'Done. Your download has started.');
+        done();
+      } else if (Date.now() - pending.started > 11 * 60e3) {
+        setStatus('err', 'ph-warning-circle', 'That took too long. Try a lower quality or a shorter clip.');
+        done();
+      }
+    }, 400);
+  });
+
+  frame.addEventListener('load', () => {
+    if (!pending) return;
+    let msg = 'Download failed.';
+    try { msg = JSON.parse(frame.contentDocument.body.innerText).detail || msg; } catch {}
+    setStatus('err', 'ph-warning-circle', msg);
+    done();
+  });
+
+</script>
+</body>
+</html>
