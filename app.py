@@ -1,5 +1,6 @@
 """LinkForge — paste a link, get the file. Thin HTTP shell around yt-dlp."""
 
+import html
 import ipaddress
 import json
 import logging
@@ -15,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
@@ -134,9 +135,15 @@ def reason(stderr: str) -> str:
     return "Download failed."
 
 
+INDEX_HTML = (Path(__file__).parent / "index.html").read_text()
+
+
 @app.get("/")
-def index():
-    return FileResponse(Path(__file__).parent / "index.html")
+def index(request: Request):
+    # Share previews (WhatsApp, Slack, X...) need an absolute image URL, and we
+    # only learn our public address per request. Escaped: Host is client-sent.
+    origin = html.escape(str(request.base_url).rstrip("/"), quote=True)
+    return HTMLResponse(INDEX_HTML.replace("{{origin}}", origin))
 
 
 @app.get("/preview")

@@ -13,7 +13,7 @@ Paste a link, get the file. LinkForge is a small self-hosted web app that downlo
 ## Run it
 
 ```bash
-docker run -p 8000:8000 <dockerhub-user>/linkforge
+docker run -p 8000:8000 rakshithraj/linkforge
 ```
 
 Or build it yourself:
