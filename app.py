@@ -163,6 +163,7 @@ def preview(request: Request, url: str):
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "Preview took too long.")
     if r.returncode != 0:
+        log.warning("preview failed for %s: %s", url, r.stderr[-2000:])
         raise HTTPException(502, reason(r.stderr))
 
     try:
