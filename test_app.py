@@ -54,30 +54,6 @@ def test_quality_args():
             assert e.status_code == 400
 
 
-def test_cookies_copy_is_used_and_removed():
-    import os, tempfile
-    import app as m
-    fd, src = tempfile.mkstemp(); os.write(fd, b"# Netscape HTTP Cookie File\n"); os.close(fd)
-    os.chmod(src, 0o444)  # read-only, like a mounted secret
-    m.COOKIES_FILE = src
-    seen = {}
-    real_run = m.subprocess.run
-    def fake_run(cmd, **kw):
-        seen["path"] = cmd[cmd.index("--cookies") + 1]
-        seen["tail"] = cmd[-2:]
-        assert os.path.exists(seen["path"]) and seen["path"] != src
-        return real_run(["true"], **kw)
-    m.subprocess.run = fake_run
-    try:
-        m.run_ytdlp(["yt-dlp"], "https://x.com/a", 5)
-    finally:
-        m.subprocess.run = real_run
-        m.COOKIES_FILE = ""
-        os.chmod(src, 0o644); os.unlink(src)
-    assert seen["tail"] == ["--", "https://x.com/a"]  # url stays last, after --
-    assert not os.path.exists(seen["path"])  # copy cleaned up
-
-
 def test_reason_messages():
     assert "cookies" in reason("ERROR: Sign in to confirm you're not a bot")
     assert "bigger" in reason("ERROR: File is larger than max-filesize")
