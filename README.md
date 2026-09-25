@@ -40,7 +40,12 @@ Set these with `-e NAME=value` on `docker run`.
 
 ### When YouTube says "Sign in to confirm you're not a bot"
 
-Servers on cloud IPs get blocked sooner or later. Export `cookies.txt` from a logged-in browser and mount it:
+Servers on cloud IPs (AWS, GCP, most VPS hosts) get blocked sooner or later. Give LinkForge cookies from a logged-in YouTube session:
+
+1. Use a spare Google account, not your main one. YouTube can flag accounts used this way.
+2. Open a private/incognito window, sign in to YouTube, then go to `https://www.youtube.com/robots.txt` in the same tab.
+3. Export cookies for youtube.com with an extension such as "Get cookies.txt LOCALLY", then close the private window without signing out. Signing out, or using that session further, makes YouTube rotate the cookies and the file stops working.
+4. Mount the file and point `COOKIES_FILE` at it. A read-only mount is fine: LinkForge hands yt-dlp a temporary copy on each run.
 
 ```bash
 docker run -p 8000:8000 \

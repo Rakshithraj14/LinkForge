@@ -146,6 +146,26 @@ def index(request: Request):
     return HTMLResponse(INDEX_HTML.replace("{{origin}}", origin))
 
 
+def run_ytdlp(cmd: list[str], url: str, timeout: int) -> subprocess.CompletedProcess:
+    """Run yt-dlp on url, with cookies if configured.
+
+    yt-dlp writes refreshed cookies back into the file it is given, so it gets a
+    throwaway copy: the mounted file can stay read-only, and two runs at once
+    can't corrupt it.
+    """
+    cookies = None
+    if COOKIES_FILE and Path(COOKIES_FILE).exists():
+        fd, cookies = tempfile.mkstemp(suffix=".txt")
+        os.close(fd)
+        shutil.copyfile(COOKIES_FILE, cookies)
+        cmd = [*cmd, "--cookies", cookies]
+    try:
+        return subprocess.run([*cmd, "--", url], capture_output=True, text=True, timeout=timeout)
+    finally:
+        if cookies:
+            Path(cookies).unlink(missing_ok=True)
+
+
 @app.get("/preview")
 def preview(request: Request, url: str):
     check_rate(request.client.host if request.client else "unknown",
@@ -154,12 +174,8 @@ def preview(request: Request, url: str):
 
     cmd = ["yt-dlp", "-j", "--skip-download", "--no-playlist", "--no-warnings",
            "--ignore-config"]
-    if COOKIES_FILE and Path(COOKIES_FILE).exists():
-        cmd += ["--cookies", COOKIES_FILE]
-    cmd += ["--", url]
-
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=PREVIEW_TIMEOUT)
+        r = run_ytdlp(cmd, url, PREVIEW_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "Preview took too long.")
     if r.returncode != 0:
@@ -207,12 +223,8 @@ def download(request: Request, url: str = Form(...), mode: str = Form("both"),
         "--max-filesize", MAX_FILESIZE,
         "-o", f"{tmp}/%(title).80s.%(ext)s",
     ]
-    if COOKIES_FILE and Path(COOKIES_FILE).exists():
-        cmd += ["--cookies", COOKIES_FILE]
-    cmd += ["--", url]
-
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+        r = run_ytdlp(cmd, url, TIMEOUT)
     except subprocess.TimeoutExpired:
         shutil.rmtree(tmp, ignore_errors=True)
         raise HTTPException(504, "Took too long, gave up.")
